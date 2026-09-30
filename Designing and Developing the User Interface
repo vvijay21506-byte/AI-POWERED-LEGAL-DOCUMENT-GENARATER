@@ -1,0 +1,475 @@
+frontend/
+├── src/
+│   ├── components/
+│   │   ├── Navbar.jsx
+│   │   ├── DocumentForm.jsx
+│   │   ├── DocumentPreview.jsx
+│   │   ├── LoadingSpinner.jsx
+│   │   └── Footer.jsx
+│   │
+│   ├── pages/
+│   │   ├── Home.jsx
+│   │   ├── GenerateDocument.jsx
+│   │   └── DocumentResult.jsx
+│   │
+│   ├── services/
+│   │   └── documentApi.js
+│   │
+│   ├── App.jsx
+│   ├── main.jsx
+│   └── index.css
+│
+├── package.json
+└── vite.config.js
+
+2. Main User Interface
+The LegalEase UI can have:
+
+Navbar
+
+LegalEase logo
+
+Home
+
+Generate Document
+
+About
+
+Landing page
+
+“Create Legal Documents with AI”
+
+Short description
+
+“Generate Document” button
+
+Document generation form
+
+Document type
+
+Jurisdiction
+
+Parties involved
+
+Requirements/details
+
+Generate button
+
+Document preview
+
+Generated legal document
+
+Copy button
+
+Download button
+
+Generate another button
+
+3. DocumentForm.jsx
+import { useState } from "react";
+
+function DocumentForm({ onGenerate, loading }) {
+  const [formData, setFormData] = useState({
+    document_type: "",
+    jurisdiction: "",
+    parties: "",
+    requirements: "",
+  });
+
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+
+    setFormData((previous) => ({
+      ...previous,
+      [name]: value,
+    }));
+  };
+
+  const handleSubmit = (event) => {
+    event.preventDefault();
+
+    onGenerate({
+      ...formData,
+      parties: formData.parties
+        .split(",")
+        .map((party) => party.trim())
+        .filter(Boolean),
+    });
+  };
+
+  return (
+    <form className="document-form" onSubmit={handleSubmit}>
+      <h2>Generate Legal Document</h2>
+
+      <label>
+        Document Type
+        <select
+          name="document_type"
+          value={formData.document_type}
+          onChange={handleChange}
+          required
+        >
+          <option value="">Select document type</option>
+          <option value="Rental Agreement">Rental Agreement</option>
+          <option value="Employment Agreement">
+            Employment Agreement
+          </option>
+          <option value="Non-Disclosure Agreement">
+            Non-Disclosure Agreement
+          </option>
+          <option value="Legal Notice">Legal Notice</option>
+          <option value="Affidavit">Affidavit</option>
+          <option value="Other">Other</option>
+        </select>
+      </label>
+
+      <label>
+        Jurisdiction
+        <input
+          type="text"
+          name="jurisdiction"
+          placeholder="e.g. Tamil Nadu, India"
+          value={formData.jurisdiction}
+          onChange={handleChange}
+          required
+        />
+      </label>
+
+      <label>
+        Parties
+        <input
+          type="text"
+          name="parties"
+          placeholder="e.g. John Doe, Jane Doe"
+          value={formData.parties}
+          onChange={handleChange}
+        />
+      </label>
+
+      <label>
+        Requirements
+        <textarea
+          name="requirements"
+          rows="7"
+          placeholder="Describe the requirements of your legal document..."
+          value={formData.requirements}
+          onChange={handleChange}
+          required
+        />
+      </label>
+
+      <button type="submit" disabled={loading}>
+        {loading ? "Generating..." : "Generate Document"}
+      </button>
+    </form>
+  );
+}
+
+export default DocumentForm;
+
+4. API Integration — documentApi.js
+const API_URL = "http://localhost:8000";
+
+export async function generateDocument(documentData) {
+  const response = await fetch(`${API_URL}/documents/generate`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(documentData),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+
+    throw new Error(
+      error.detail || "Unable to generate the legal document."
+    );
+  }
+
+  return response.json();
+}
+
+5. GenerateDocument.jsx
+import { useState } from "react";
+import DocumentForm from "../components/DocumentForm";
+import DocumentPreview from "../components/DocumentPreview";
+import { generateDocument } from "../services/documentApi";
+
+function GenerateDocument() {
+  const [document, setDocument] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleGenerate = async (data) => {
+    setLoading(true);
+    setError("");
+    setDocument(null);
+
+    try {
+      const result = await generateDocument(data);
+      setDocument(result);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <main className="generate-page">
+      <DocumentForm
+        onGenerate={handleGenerate}
+        loading={loading}
+      />
+
+      {error && (
+        <div className="error-message">
+          {error}
+        </div>
+      )}
+
+      {document && (
+        <DocumentPreview document={document} />
+      )}
+    </main>
+  );
+}
+
+export default GenerateDocument;
+
+6. DocumentPreview.jsx
+function DocumentPreview({ document }) {
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(document.content);
+    alert("Document copied to clipboard.");
+  };
+
+  const handleDownload = () => {
+    const blob = new Blob(
+      [document.content],
+      { type: "text/plain" }
+    );
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.download = `${document.document_type}.txt`;
+    link.click();
+
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <section className="document-preview">
+      <div className="preview-header">
+        <div>
+          <h2>{document.document_type}</h2>
+          <p>{document.jurisdiction}</p>
+        </div>
+
+        <div className="preview-actions">
+          <button onClick={handleCopy}>
+            Copy
+          </button>
+
+          <button onClick={handleDownload}>
+            Download
+          </button>
+        </div>
+      </div>
+
+      <article className="document-content">
+        {document.content}
+      </article>
+    </section>
+  );
+}
+
+export default DocumentPreview;
+
+7. Basic UI Styling
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #f4f7fb;
+  color: #1f2937;
+}
+
+.generate-page {
+  width: min(1100px, 92%);
+  margin: 40px auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 30px;
+}
+
+.document-form,
+.document-preview {
+  background: white;
+  padding: 28px;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+.document-form h2,
+.document-preview h2 {
+  margin-top: 0;
+}
+
+.document-form label {
+  display: block;
+  margin-top: 18px;
+  font-weight: 600;
+}
+
+.document-form input,
+.document-form select,
+.document-form textarea {
+  width: 100%;
+  margin-top: 8px;
+  padding: 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 15px;
+}
+
+.document-form textarea {
+  resize: vertical;
+}
+
+.document-form button,
+.preview-actions button {
+  border: none;
+  border-radius: 8px;
+  padding: 12px 18px;
+  margin-top: 20px;
+  cursor: pointer;
+  background: #1d4ed8;
+  color: white;
+  font-weight: 600;
+}
+
+.document-form button {
+  width: 100%;
+}
+
+.document-form button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.document-preview {
+  min-height: 500px;
+}
+
+.preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 15px;
+}
+
+.preview-header p {
+  color: #6b7280;
+}
+
+.preview-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.preview-actions button {
+  margin-top: 0;
+}
+
+.document-content {
+  margin-top: 25px;
+  padding: 25px;
+  min-height: 400px;
+  background: #fafafa;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  white-space: pre-wrap;
+  line-height: 1.7;
+}
+
+.error-message {
+  grid-column: 1 / -1;
+  padding: 15px;
+  border-radius: 8px;
+  color: #991b1b;
+  background: #fee2e2;
+}
+
+@media (max-width: 800px) {
+  .generate-page {
+    grid-template-columns: 1fr;
+  }
+
+  .preview-header {
+    flex-direction: column;
+  }
+}
+
+8. Epic 4 Implementation Flow
+User
+ │
+ ▼
+LegalEase Home Page
+ │
+ ▼
+Document Generation Form
+ │
+ ├── Document Type
+ ├── Jurisdiction
+ ├── Parties
+ └── Requirements
+ │
+ ▼
+React Frontend
+ │
+ ▼
+POST /documents/generate
+ │
+ ▼
+FastAPI routes.py
+ │
+ ▼
+AI Document Generator
+ │
+ ▼
+Generated Legal Document
+ │
+ ▼
+Document Preview
+ │
+ ├── Copy
+ ├── Download
+ └── Generate Another
+
+EPIC 4 deliverables
+Responsive LegalEase landing page
+
+Document-generation form
+
+Form validation
+
+API integration with the backend
+
+Loading state during AI generation
+
+Error handling
+
+Generated-document preview
+
+Copy-to-clipboard functionality
+
+Document download
+
+Mobile-responsive design
